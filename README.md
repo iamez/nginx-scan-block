@@ -71,8 +71,6 @@ How It Works:
 
 ## Example SQL Commands
 
-### How many IPs have we logged?
-
 ```sql
 -- Total number of distinct IPs logged
 SELECT COUNT(DISTINCT ip) FROM nginx_offenders;
@@ -92,8 +90,8 @@ SELECT * FROM nginx_offenders WHERE id = y;
 -- Replace 'x.x.x.x' with the specific IP address you're interested in
 SELECT * FROM nginx_audit_logs WHERE ip = 'x.x.x.x';
 ```
-##Available Audit Information
-The columns in the nginx_audit_logs table include:
+### Available Audit Information
+### The columns in the nginx_audit_logs table include:
 
     ID: A unique identifier for each record.
     IP: The IP address associated with the audit log entry.
