@@ -92,19 +92,24 @@ is_ip_seen() {
     [ -n "$seen_count" ]
 }
 
-# Function to check if IP is a potential threat based on 403 responses
+# Function to check if IP is a potential threat based on 403 and 404 responses
 is_potential_threat() {
     local ip="$1"
     local potential_threat
 
-    # Use grep to count the number of 403 responses for the given IP
+    # Use grep to count the number of 403 and 404 responses for the given IP
     local num_403_responses
     num_403_responses=$(sqlite3 "$DATABASE" "SELECT COUNT(*) FROM nginx_access_logs WHERE ip = '$ip' AND status = 403;")
 
-    # If the number of 403 responses is above a threshold, consider it a potential threat
-    local threshold=10  # Adjust the threshold as needed
-    [ "$num_403_responses" -gt "$threshold" ]
+    local num_404_responses
+    num_404_responses=$(sqlite3 "$DATABASE" "SELECT COUNT(*) FROM nginx_access_logs WHERE ip = '$ip' AND status = 404;")
+
+    # If the total number of 403 and 404 responses is above a threshold, consider it a potential threat
+    local threshold=20  # Adjust the threshold as needed
+    total_responses=$((num_403_responses + num_404_responses))
+    [ "$total_responses" -gt "$threshold" ]
 }
+
 
 
 # Function to update the database with IP information
@@ -122,7 +127,7 @@ update_database() {
             sqlite3 "$DATABASE" "INSERT INTO nginx_offenders (ip, seen_count, potential_threat) VALUES ('$ip', 1, '0');"
         else
             local seen_count
-            seen_count=$(sqlite3 "$DATABASE" "SELECT seen_count FROM nginx_offenders WHERE ip = '$ip';")
+            seen_count=$(sqlite3 "$DATABASE" "SELECT TRIM(seen_count) FROM nginx_offenders WHERE ip = '$ip';")
 
             if [ -n "$seen_count" ] && [[ "$seen_count" =~ ^[0-9]+$ ]] && [ "$seen_count" -ge "$THRESHOLD" ]; then
                 echo "IP $ip seen $seen_count times. Checking for potential threat."
@@ -138,6 +143,7 @@ update_database() {
     fi
 }
 
+
 # Main logic
 while true; do
     extract_ips | while read -r ip; do
@@ -148,6 +154,11 @@ while true; do
             block_ip_in_iptables "$ip"
             echo "Blocked IP $ip in iptables."
         fi
+        if is_potential_threat "$ip"; then
+            block_ip_in_iptables "$ip"  # Block the IP if it's a potential threat
+            echo "Potential threat detected for IP $ip. Blocked in iptables."
+        fi
     done
     sleep 60  # Sleep for 60 seconds before processing new entries again
 done
+
