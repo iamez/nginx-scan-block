@@ -39,7 +39,7 @@ block_ip_in_iptables() {
     local ip="$1"
     # Add iptables rule to block the IP for incoming traffic
     sudo iptables -A INPUT -s "$ip" -j DROP
-    # Add iptables rule to block outgoing traffic
+    # Add iptables rule to block ICMP echo-request for outgoing traffic
     sudo iptables -A OUTPUT -d "$ip" -j DROP
     # Update iptables_blocked flag in the database
     sqlite3 "$DATABASE" "UPDATE nginx_offenders SET iptables_blocked = 1 WHERE ip = '$ip';"
@@ -90,8 +90,15 @@ is_potential_threat() {
 
     # If the total number of 403 and 404 responses is above a threshold, consider it a potential threat
     local threshold=20  # Adjust the threshold as needed
+
+    # Additional check: Exclude IPs with certain URL patterns from being flagged as potential threats
+    local num_legitimate_access
+    num_legitimate_access=$(sqlite3 "$DATABASE" "SELECT COUNT(*) FROM nginx_access_logs WHERE ip = '$ip' AND (uri LIKE '/etmain/%' OR uri LIKE '/legacy/%');")
+
     total_responses=$((num_403_responses + num_404_responses))
-    [ "$total_responses" -gt "$threshold" ]
+
+    # Consider it a potential threat only if the total responses exceed the threshold and there are no legitimate accesses
+    [ "$total_responses" -gt "$threshold" ] && [ "$num_legitimate_access" -eq 0 ]
 }
 
 # Main logic with persistent tail
