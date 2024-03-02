@@ -68,3 +68,38 @@ How It Works:
     Potential Threat Check: For IPs exceeding a specified threshold, it checks if the IP exhibits potential threat behavior based on the number of 403 and 404 responses.
 
     Blocking: If an IP is identified as a potential threat, it is added to a special log, and iptables rules are applied to block incoming and outgoing traffic for that IP.
+
+## Example SQL Commands
+
+### How many IPs have we logged?
+
+```sql
+-- Total number of distinct IPs logged
+SELECT COUNT(DISTINCT ip) FROM nginx_offenders;
+
+-- Number of distinct IPs blocked in IPTables
+SELECT COUNT(DISTINCT ip) FROM nginx_offenders WHERE iptables_blocked = 1;
+
+-- Retrieve the top 10 most seen IPs
+SELECT ip, seen_count FROM nginx_offenders ORDER BY seen_count DESC LIMIT 10;
+
+-- Replace 'x.x.x.x' with the specific IP address you're interested in
+SELECT * FROM nginx_offenders WHERE ip = 'x.x.x.x';
+
+-- Replace 'y' with the specific ID you're interested in
+SELECT * FROM nginx_offenders WHERE id = y;
+
+-- Replace 'x.x.x.x' with the specific IP address you're interested in
+SELECT * FROM nginx_audit_logs WHERE ip = 'x.x.x.x';
+```
+##Available Audit Information
+The columns in the nginx_audit_logs table include:
+
+    ID: A unique identifier for each record.
+    IP: The IP address associated with the audit log entry.
+    Timestamp: The timestamp indicating when the log entry occurred.
+    Request Method: The HTTP request method (e.g., GET, POST).
+    Request URL: The URL that was requested.
+    Status: The HTTP status code of the response.
+
+
