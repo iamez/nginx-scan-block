@@ -5,40 +5,23 @@ DATABASE="/home/et/nginx_ips.db"
 THRESHOLD=30
 WHITELIST=("127.0.0.1" "185.107.96.127" "93.103.149.102")
 
-# Function to extract IPs and relevant data from nginx access log
-extract_ips() {
-    local ips
-    while read -r line; do
-        local ip
-        if [[ $line =~ ^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
-            ip="${BASH_REMATCH[1]}"
-            
-            # Check if the IP is whitelisted or empty
-            if ! is_ip_whitelisted "$ip" && [[ "$ip" != "" ]]; then
-                ips+="$ip\n"
-            fi
-        elif [[ $line =~ WARNING:\ Invalid\ or\ empty\ IP\ address:\ (.*)\ Skipping\. ]]; then
-            local invalid_ip="${BASH_REMATCH[1]}"
-            echo "WARNING: Invalid or empty IP address: $invalid_ip. Skipping."
-        fi
-    done < "$LOG_FILE"
-    echo -e "$ips"
-}
 # Function to update last_seen_time in the database
 update_last_seen_time() {
     local ip="$1"
     sqlite3 "$DATABASE" "UPDATE nginx_offenders SET last_seen_time = CURRENT_TIMESTAMP WHERE ip = '$ip';"
 }
 
-# Function to check if IP is in the top offenders list
-is_top_offender() {
+# Function to insert audit log into the database
+insert_audit_log() {
     local ip="$1"
-    local seen_count
-    seen_count=$(sqlite3 "$DATABASE" "SELECT seen_count FROM nginx_offenders WHERE ip = '$ip';")
+    local timestamp="$2"
+    local request_method="$3"
+    local uri="$4"
+    local status_code="$5"
+    local user_agent="$6"
+    local referer="$7"
 
-    # Check if seen_count is not empty and is greater than or equal to the threshold
-    # If empty, consider it a new IP, and if less than the threshold, do nothing for now
-    [[ -n "$seen_count" && "$seen_count" -ge "$THRESHOLD" ]]
+    sqlite3 "$DATABASE" "INSERT INTO nginx_audit_logs (ip, timestamp, request_method, uri, status_code, user_agent, referer) VALUES ('$ip', '$timestamp', '$request_method', '$uri', '$status_code', '$user_agent', '$referer');"
 }
 
 # Function to check if IP is blocked in iptables
@@ -46,7 +29,9 @@ is_iptables_blocked() {
     local ip="$1"
     local iptables_blocked
     iptables_blocked=$(sqlite3 "$DATABASE" "SELECT iptables_blocked FROM nginx_offenders WHERE ip = '$ip';")
-    [ "$iptables_blocked" -eq 1 ]
+
+    # Check if iptables_blocked is not empty and is equal to 1
+    [[ -n "$iptables_blocked" && "$iptables_blocked" == 1 ]]
 }
 
 # Function to block IP in iptables
@@ -55,7 +40,7 @@ block_ip_in_iptables() {
     # Add iptables rule to block the IP for incoming traffic
     sudo iptables -A INPUT -s "$ip" -j DROP
     # Add iptables rule to block ICMP echo-request for outgoing traffic
-    sudo iptables -A OUTPUT -d "$ip" -p icmp --icmp-type echo-request -j DROP
+    sudo iptables -A OUTPUT -d "$ip" -j DROP
     # Update iptables_blocked flag in the database
     sqlite3 "$DATABASE" "UPDATE nginx_offenders SET iptables_blocked = 1 WHERE ip = '$ip';"
 }
@@ -110,54 +95,49 @@ is_potential_threat() {
     [ "$total_responses" -gt "$threshold" ]
 }
 
+# Main logic with persistent tail
+tail -n 3 -F "$LOG_FILE" | while read -r line; do
+    ip=""
 
+    if [[ $line =~ ^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+        ip="${BASH_REMATCH[1]}"
+        timestamp=$(echo "$line" | awk '{print $4}' | sed 's/\[//')
 
-# Function to update the database with IP information
-update_database() {
-    local ip="$1"
-    # Check if the IP is empty or invalid
-    if [ -z "$ip" ] || [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "Invalid or empty IP address: $ip. Skipping."
-        return
-    fi
+        # Check if the IP is whitelisted or empty
+        if ! is_ip_whitelisted "$ip" && [[ "$ip" != "" ]]; then
+            handle_blank_ghost_ip "$ip"
+            update_last_seen_time "$ip"  # Update last_seen_time for each IP encountered
+            if ! is_ip_seen "$ip"; then
+                echo "New IP detected: $ip. Adding to the database."
+                sqlite3 "$DATABASE" "INSERT INTO nginx_offenders (ip, seen_count, potential_threat) VALUES ('$ip', 1, '0');"
+            else
+                seen_count=$(sqlite3 "$DATABASE" "SELECT TRIM(seen_count) FROM nginx_offenders WHERE ip = '$ip';")
 
-    if ! is_ip_whitelisted "$ip"; then
-        if ! is_ip_seen "$ip"; then
-            echo "New IP detected: $ip. Adding to the database."
-            sqlite3 "$DATABASE" "INSERT INTO nginx_offenders (ip, seen_count, potential_threat) VALUES ('$ip', 1, '0');"
-        else
-            local seen_count
-            seen_count=$(sqlite3 "$DATABASE" "SELECT TRIM(seen_count) FROM nginx_offenders WHERE ip = '$ip';")
-
-            if [ -n "$seen_count" ] && [[ "$seen_count" =~ ^[0-9]+$ ]] && [ "$seen_count" -ge "$THRESHOLD" ]; then
-                echo "IP $ip seen $seen_count times. Checking for potential threat."
-                if ! is_potential_threat "$ip"; then
-                    echo "IP $ip is a potential threat. Adding to special log."
-                    echo "Special Logging for IP $ip (Seen Count: $seen_count)" >> "/home/et/special_nginx_ip.log"
-                    sqlite3 "$DATABASE" "UPDATE nginx_offenders SET potential_threat = '1' WHERE ip = '$ip';"
+                if [ -n "$seen_count" ] && [[ "$seen_count" =~ ^[0-9]+$ ]] && [ "$seen_count" -ge "$THRESHOLD" ]; then
+                    echo "IP $ip seen $seen_count times. Checking for potential threat."
+                    if ! is_potential_threat "$ip"; then
+                        echo "IP $ip is a potential threat. Adding to special log."
+                        echo "Special Logging for IP $ip (Seen Count: $seen_count)" >> "/home/et/special_nginx_ip.log"
+                        block_ip_in_iptables "$ip"  # Block the IP if it's a potential threat
+                        echo "Blocked IP $ip in iptables."
+                    fi
                 fi
+
+                sqlite3 "$DATABASE" "UPDATE nginx_offenders SET seen_count = seen_count + 1 WHERE ip = '$ip';"
             fi
-
-            sqlite3 "$DATABASE" "UPDATE nginx_offenders SET seen_count = seen_count + 1 WHERE ip = '$ip';"
         fi
+
+        # Extract relevant information for audit log
+        request_method=$(echo "$line" | awk '{print $6}')
+        uri=$(echo "$line" | awk '{print $7}')
+        status_code=$(echo "$line" | awk '{print $9}')
+        user_agent=$(echo "$line" | awk -F'"' '{print $6}')
+        referer=$(echo "$line" | awk -F'"' '{print $8}')
+
+        # Insert into audit log
+        insert_audit_log "$ip" "$timestamp" "$request_method" "$uri" "$status_code" "$user_agent" "$referer"
+    elif [[ $line =~ WARNING:\ Invalid\ or\ empty\ IP\ address:\ (.*)\ Skipping\. ]]; then
+        invalid_ip="${BASH_REMATCH[1]}"
+        echo "WARNING: Invalid or empty IP address: $invalid_ip. Skipping."
     fi
-}
-
-
-# Main logic
-while true; do
-    extract_ips | while read -r ip; do
-        handle_blank_ghost_ip "$ip"
-        update_database "$ip"
-        update_last_seen_time "$ip"  # Update last_seen_time for each IP encountered
-        if is_top_offender "$ip" && ! is_iptables_blocked "$ip"; then
-            block_ip_in_iptables "$ip"
-            echo "Blocked IP $ip in iptables."
-        fi
-        if is_potential_threat "$ip"; then
-            block_ip_in_iptables "$ip"  # Block the IP if it's a potential threat
-            echo "Potential threat detected for IP $ip. Blocked in iptables."
-        fi
-    done
-    sleep 60  # Sleep for 60 seconds before processing new entries again
 done
