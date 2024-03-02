@@ -89,6 +89,11 @@ SELECT * FROM nginx_offenders WHERE id = y;
 
 -- Replace 'x.x.x.x' with the specific IP address you're interested in
 SELECT * FROM nginx_audit_logs WHERE ip = 'x.x.x.x';
+
+-- Replace 'x.x.x.x' with the specific IP address you're interested in
+SELECT * FROM nginx_offenders WHERE ip = 'x.x.x.x' ORDER BY last_seen_time DESC;
+
+
 ```
 ### Available Audit Information
 ### The columns in the nginx_audit_logs table include:
