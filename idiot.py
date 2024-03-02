@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import os
 import time
 import sqlite3
@@ -6,6 +5,46 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from collections import Counter
 
+# Define ANSI escape codes for colors
+class Colors:
+    WHITE = '\033[97m'
+    RED = '\033[91m'
+    YELLOW = '\033[93m'
+    DARK_BLUE = '\033[34m'
+    END = '\033[0m'
+
+class NginxLogMonitor(FileSystemEventHandler):
+    # ... (rest of the class remains unchanged)
+
+    def print_statistics(self):
+        connection = sqlite3.connect(self.database)
+        cursor = connection.cursor()
+
+        # Get top blocked IPs
+        cursor.execute("SELECT ip, seen_count, potential_threat FROM nginx_offenders ORDER BY seen_count DESC LIMIT 5;")
+        top_ips_activity = cursor.fetchall()
+
+        print(f"{Colors.WHITE}\nIP Activity Log:")
+        for ip, seen_count, potential_threat in top_ips_activity:
+            color = Colors.WHITE
+
+            # Highlight blocked IPs in red
+            if self.is_iptables_blocked(ip):
+                color = Colors.RED
+
+            # Highlight potential threat IPs in yellow
+            elif self.is_potential_threat(ip):
+                color = Colors.YELLOW
+
+            print(f"{color}IP: {ip} | Seen Count: {seen_count} | Potential Threat: {potential_threat}{Colors.END}")
+
+        # Count total unique IPs logged
+        cursor.execute("SELECT COUNT(DISTINCT ip) FROM nginx_offenders;")
+        total_unique_ips = cursor.fetchone()[0]
+        print(f"\nTotal Unique IPs Logged: {Colors.DARK_BLUE}{total_unique_ips}{Colors.END}")
+
+        connection.close()
+        
 class NginxLogMonitor(FileSystemEventHandler):
     def __init__(self, log_file, database, threshold, whitelist):
         super(NginxLogMonitor, self).__init__()
