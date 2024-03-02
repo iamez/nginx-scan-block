@@ -2,7 +2,7 @@
 
 LOG_FILE="/var/log/nginx/access.log"
 DATABASE="/home/et/nginx_ips.db"
-THRESHOLD=3
+THRESHOLD=30
 WHITELIST=("127.0.0.1" "185.107.96.127" "93.103.149.102")
 
 # Function to extract IPs and relevant data from nginx access log
