@@ -39,7 +39,7 @@ block_ip_in_iptables() {
     local ip="$1"
     # Add iptables rule to block the IP for incoming traffic
     sudo iptables -A INPUT -s "$ip" -j DROP
-    # Add iptables rule to block ICMP echo-request for outgoing traffic
+    # Add iptables rule to block outgoing traffic
     sudo iptables -A OUTPUT -d "$ip" -j DROP
     # Update iptables_blocked flag in the database
     sqlite3 "$DATABASE" "UPDATE nginx_offenders SET iptables_blocked = 1 WHERE ip = '$ip';"
@@ -80,7 +80,6 @@ is_ip_seen() {
 # Function to check if IP is a potential threat based on 403 and 404 responses
 is_potential_threat() {
     local ip="$1"
-    local potential_threat
 
     # Use grep to count the number of 403 and 404 responses for the given IP
     local num_403_responses
