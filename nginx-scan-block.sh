@@ -24,7 +24,6 @@ extract_ips() {
     done < "$LOG_FILE"
     echo -e "$ips"
 }
-
 # Function to update last_seen_time in the database
 update_last_seen_time() {
     local ip="$1"
@@ -100,12 +99,18 @@ is_potential_threat() {
 
     # Use grep to count the number of 403 and 404 responses for the given IP
     local num_403_responses
-    num_403_responses=$(sqlite3 "$DATABASE" "SELECT COUNT(*) FROM nginx_access_logs WHERE ip = '$ip' AND (status = 403 OR status = 404);")
+    num_403_responses=$(sqlite3 "$DATABASE" "SELECT COUNT(*) FROM nginx_access_logs WHERE ip = '$ip' AND status = 403;")
+
+    local num_404_responses
+    num_404_responses=$(sqlite3 "$DATABASE" "SELECT COUNT(*) FROM nginx_access_logs WHERE ip = '$ip' AND status = 404;")
 
     # If the total number of 403 and 404 responses is above a threshold, consider it a potential threat
-    local threshold=10  # Adjust the threshold as needed
-    [ "$num_403_responses" -gt "$threshold" ]
+    local threshold=20  # Adjust the threshold as needed
+    total_responses=$((num_403_responses + num_404_responses))
+    [ "$total_responses" -gt "$threshold" ]
 }
+
+
 
 # Function to update the database with IP information
 update_database() {
@@ -137,6 +142,7 @@ update_database() {
         fi
     fi
 }
+
 
 # Main logic
 while true; do
