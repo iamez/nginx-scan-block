@@ -52,8 +52,10 @@ is_iptables_blocked() {
 # Function to block IP in iptables
 block_ip_in_iptables() {
     local ip="$1"
-    # Add iptables rule to block the IP
+    # Add iptables rule to block the IP for incoming traffic
     sudo iptables -A INPUT -s "$ip" -j DROP
+    # Add iptables rule to block ICMP echo-request for outgoing traffic
+    sudo iptables -A OUTPUT -d "$ip" -p icmp --icmp-type echo-request -j DROP
     # Update iptables_blocked flag in the database
     sqlite3 "$DATABASE" "UPDATE nginx_offenders SET iptables_blocked = 1 WHERE ip = '$ip';"
 }
