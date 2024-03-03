@@ -10,9 +10,9 @@ Run the following commands in your terminal to create the SQLite database:
 ```bash
 sqlite3 /path/to/nginx_ips.db
 ```
-
 Replace /path/to/nginx_ips.db with the actual path where you want to store your database.
-##Step 2: Create Tables
+
+## Step 2: Create Tables
 
 Inside the SQLite prompt, you can create the necessary tables for your use case. Copy and paste the following commands:
 ```sql
@@ -20,21 +20,32 @@ Inside the SQLite prompt, you can create the necessary tables for your use case.
 CREATE TABLE nginx_offenders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ip TEXT NOT NULL,
+    scanned INTEGER DEFAULT 0,
+    last_seen_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    iptables_blocked INTEGER DEFAULT 0,
     seen_count INTEGER DEFAULT 0,
-    potential_threat INTEGER DEFAULT 0,
-    last_seen_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    iptables_blocked INTEGER DEFAULT 0
+    potential_threat INTEGER DEFAULT 0
 );
-
--- Create the nginx_audit_logs table
+--access.log...log
 CREATE TABLE nginx_audit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ip TEXT NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMP,
     request_method TEXT,
-    request_url TEXT,
-    status INTEGER
+    uri TEXT,
+    status_code INTEGER,
+    user_agent TEXT,
+    referer TEXT
 );
+
+--create the nmap table
+CREATE TABLE nmap_info (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT NOT NULL,
+    scan_results TEXT,
+    scanned INTEGER DEFAULT 0
+);
+
 ```
 This creates two tables: nginx_offenders for tracking offender information and nginx_audit_logs for storing detailed logs.
 ##Step 3: Set Permissions
@@ -92,6 +103,41 @@ SELECT * FROM nginx_audit_logs WHERE ip = 'x.x.x.x';
 
 -- Replace 'x.x.x.x' with the specific IP address you're interested in
 SELECT * FROM nginx_offenders WHERE ip = 'x.x.x.x' ORDER BY last_seen_time DESC;
+
+sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders;"
+
+Browse IPs with scanned flag set to 1:
+sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders WHERE scanned = 1;"
+
+Browse IPs with iptables_blocked flag set to 1:
+sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders WHERE iptables_blocked = 1;"
+
+Browse IPs marked as potential threats:
+sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders WHERE potential_threat = 1;"
+
+Search for a specific IP:
+sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders WHERE ip = 'your_target_ip';"
+
+Sort IPs by last seen time (recent first):
+sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders ORDER BY last_seen_time DESC;"
+
+Sort IPs by seen count (high to low):
+sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders ORDER BY seen_count DESC;"
+
+Filter IPs based on a threshold seen count (e.g., 10):
+sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders WHERE seen_count >= 10;"
+
+Count of IPs with non-null scan_results:
+sqlite3 nginx_ips.db "SELECT COUNT(*) FROM nmap_info WHERE scan_results IS NOT NULL;"
+
+Count of IPs with scanned flag set to 1:
+sqlite3 nginx_ips.db "SELECT COUNT(*) FROM nmap_info WHERE scanned = 1;"
+
+Count of distinct IPs in nmap_info:
+sqlite3 nginx_ips.db "SELECT COUNT(DISTINCT ip) FROM nmap_info;"
+
+List distinct IPs in nmap_info:
+sqlite3 nginx_ips.db "SELECT DISTINCT ip FROM nmap_info;"
 
 
 ```
