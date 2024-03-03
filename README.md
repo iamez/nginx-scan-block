@@ -1,5 +1,5 @@
-# scripts 
-**nginx-scan-block.sh - nginx_ips.db Instructions by ChatGPT**
+#nginx-scan-block.sh
+**nginx-scan-block.sh - nmap_scan.sh - match.sh - nginx_ips.db Instructions by ChatGPT**
 
 Below is a step-by-step tutorial on setting up and using the `nginx_ips.db` database for logging and monitoring IP activity in Nginx. This tutorial assumes that you already have SQLite installed on your system.
 
@@ -8,9 +8,8 @@ Below is a step-by-step tutorial on setting up and using the `nginx_ips.db` data
 Run the following commands in your terminal to create the SQLite database:
 
 ```bash
-sqlite3 /path/to/nginx_ips.db
+sqlite3 nginx_ips.db
 ```
-Replace /path/to/nginx_ips.db with the actual path where you want to store your database.
 
 ## Step 2: Create Tables
 
@@ -48,7 +47,8 @@ CREATE TABLE nmap_info (
 
 ```
 This creates two tables: nginx_offenders for tracking offender information and nginx_audit_logs for storing detailed logs.
-##Step 3: Set Permissions
+
+## Step 3: Set Permissions
 ```bash
 chmod 644 /path/to/nginx_ips.db
 ```
@@ -104,40 +104,47 @@ SELECT * FROM nginx_audit_logs WHERE ip = 'x.x.x.x';
 -- Replace 'x.x.x.x' with the specific IP address you're interested in
 SELECT * FROM nginx_offenders WHERE ip = 'x.x.x.x' ORDER BY last_seen_time DESC;
 
-sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders;"
+-- Show all
+SELECT * FROM nginx_offenders;
 
-Browse IPs with scanned flag set to 1:
-sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders WHERE scanned = 1;"
+--Browse IPs with scanned flag set to 1:
+SELECT * FROM nginx_offenders WHERE scanned = 1;
 
-Browse IPs with iptables_blocked flag set to 1:
-sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders WHERE iptables_blocked = 1;"
+--Browse IPs with iptables_blocked flag set to 1:
+SELECT * FROM nginx_offenders WHERE iptables_blocked = 1;
 
-Browse IPs marked as potential threats:
-sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders WHERE potential_threat = 1;"
+--Browse IPs marked as potential threats:
+SELECT * FROM nginx_offenders WHERE potential_threat = 1;
 
-Search for a specific IP:
-sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders WHERE ip = 'your_target_ip';"
+--Search for a specific IP:
+SELECT * FROM nginx_offenders WHERE ip = 'your_target_ip';
 
-Sort IPs by last seen time (recent first):
-sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders ORDER BY last_seen_time DESC;"
+--Sort IPs by last seen time (recent first):
+SELECT * FROM nginx_offenders ORDER BY last_seen_time DESC;
 
-Sort IPs by seen count (high to low):
-sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders ORDER BY seen_count DESC;"
+--Sort IPs by seen count (high to low):
+SELECT * FROM nginx_offenders ORDER BY seen_count DESC;
 
-Filter IPs based on a threshold seen count (e.g., 10):
-sqlite3 nginx_ips.db "SELECT * FROM nginx_offenders WHERE seen_count >= 10;"
+--Filter IPs based on a threshold seen count (e.g., 10):
+SELECT * FROM nginx_offenders WHERE seen_count >= 10;
 
-Count of IPs with non-null scan_results:
-sqlite3 nginx_ips.db "SELECT COUNT(*) FROM nmap_info WHERE scan_results IS NOT NULL;"
+--Count of IPs with non-null scan_results:
+SELECT COUNT(*) FROM nmap_info WHERE scan_results IS NOT NULL;
 
-Count of IPs with scanned flag set to 1:
-sqlite3 nginx_ips.db "SELECT COUNT(*) FROM nmap_info WHERE scanned = 1;"
+--Count of IPs with scanned flag set to 1:
+SELECT COUNT(*) FROM nmap_info WHERE scanned = 1;
 
-Count of distinct IPs in nmap_info:
-sqlite3 nginx_ips.db "SELECT COUNT(DISTINCT ip) FROM nmap_info;"
+--Count of distinct IPs in nmap_info:
+SELECT COUNT(DISTINCT ip) FROM nmap_info;
 
-List distinct IPs in nmap_info:
-sqlite3 nginx_ips.db "SELECT DISTINCT ip FROM nmap_info;"
+--List distinct IPs in nmap_info:
+SELECT DISTINCT ip FROM nmap_info;
+
+--To get the Nmap info for a specific IP address from the nmap_info table, you can use the following SQLite command:
+SELECT * FROM nmap_info WHERE ip = 'your_target_ip';
+
+--If you only want to see the scan_results for a specific IP, you can modify the query as follows:
+SELECT scan_results FROM nmap_info WHERE ip = 'your_target_ip';
 
 
 ```
