@@ -2,7 +2,7 @@
 
 LOG_FILE="/var/log/nginx/access.log"
 DATABASE="/home/et/nginx_ips.db"
-THRESHOLD=15
+THRESHOLD=9
 WHITELIST=("127.0.0.1" "185.107.96.127" "93.103.149.102")
 
 # Function to update last_seen_time in the database
@@ -39,7 +39,7 @@ block_ip_in_iptables() {
     local ip="$1"
     # Add iptables rule to block the IP for incoming traffic
     sudo iptables -A INPUT -s "$ip" -j DROP
-    # Add iptables rule to block ICMP echo-request for outgoing traffic
+    # Add iptables rule to block outgoing traffic
     sudo iptables -A OUTPUT -d "$ip" -j DROP
     # Update iptables_blocked flag in the database
     sqlite3 "$DATABASE" "UPDATE nginx_offenders SET iptables_blocked = 1 WHERE ip = '$ip';"
@@ -48,15 +48,16 @@ block_ip_in_iptables() {
 # Function to handle "blank/ghost IP" case
 handle_blank_ghost_ip() {
     local ip="$1"
-    local count="$2"
+    local seen_count="$2"
 
     if [[ "$ip" == "" ]]; then
         echo "WARNING: Invalid or empty IP address: $ip. Skipping."
     else
-        echo "IP $ip seen $count times. Checking for potential threat."
+        echo "IP $ip seen $seen_count times. Checking for potential threat."
         # Add your threat-checking logic here
     fi
 }
+
 
 # Function to check if IP is whitelisted
 is_ip_whitelisted() {
@@ -89,7 +90,7 @@ is_potential_threat() {
     num_404_responses=$(sqlite3 "$DATABASE" "SELECT COUNT(*) FROM nginx_access_logs WHERE ip = '$ip' AND status = 404;")
 
     # If the total number of 403 and 404 responses is above a threshold, consider it a potential threat
-    local threshold=5  # Adjust the threshold as needed
+    local threshold=20  # Adjust the threshold as needed
 
     # Additional check: Exclude IPs with certain URL patterns from being flagged as potential threats
     local num_legitimate_access
@@ -117,7 +118,8 @@ tail -n 3 -F "$LOG_FILE" | while read -r line; do
                 echo "New IP detected: $ip. Adding to the database."
                 sqlite3 "$DATABASE" "INSERT INTO nginx_offenders (ip, seen_count, potential_threat) VALUES ('$ip', 1, '0');"
             else
-                seen_count=$(sqlite3 "$DATABASE" "SELECT TRIM(seen_count) FROM nginx_offenders WHERE ip = '$ip';")
+                seen_count=$(sqlite3 "$DATABASE" "SELECT seen_count FROM nginx_offenders WHERE ip = '$ip';")
+                seen_count=$(echo "$seen_count" | tr -d '[:space:]')  # Remove leading/trailing spaces
 
                 if [ -n "$seen_count" ] && [[ "$seen_count" =~ ^[0-9]+$ ]] && [ "$seen_count" -ge "$THRESHOLD" ]; then
                     echo "IP $ip seen $seen_count times. Checking for potential threat."
