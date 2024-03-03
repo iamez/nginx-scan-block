@@ -146,8 +146,8 @@ SELECT * FROM nmap_info WHERE ip = 'your_target_ip';
 --If you only want to see the scan_results for a specific IP, you can modify the query as follows:
 SELECT scan_results FROM nmap_info WHERE ip = 'your_target_ip';
 
-```bash
-sqlite3 nginx_ips.db "SELECT no.ip, no.seen_count FROM nginx_offenders no JOIN nmap_info ni ON no.ip = ni.ip AND ni.scanned = 1 GROUP BY no.ip HAVING no.seen_count >= 4 ORDER BY no.seen_count DESC LIMIT 100;"
+--This will provide a list of the top 100 IP addresses from nginx_offenders with the most seen counts, where each IP has the scanned flag set to 1 in nmap_info, and the seen_count is 4 or more. Adjust the LIMIT value if you want more or fewer results.
+SELECT no.ip, no.seen_count FROM nginx_offenders no JOIN nmap_info ni ON no.ip = ni.ip AND ni.scanned = 1 GROUP BY no.ip HAVING no.seen_count >= 4 ORDER BY no.seen_count DESC LIMIT 100;
 ```
 
 
