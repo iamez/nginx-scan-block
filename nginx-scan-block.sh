@@ -2,7 +2,7 @@
 
 LOG_FILE="/var/log/nginx/access.log"
 DATABASE="/home/et/nginx_ips.db"
-THRESHOLD=30
+THRESHOLD=15
 WHITELIST=("127.0.0.1" "185.107.96.127" "93.103.149.102")
 
 # Function to update last_seen_time in the database
@@ -89,7 +89,7 @@ is_potential_threat() {
     num_404_responses=$(sqlite3 "$DATABASE" "SELECT COUNT(*) FROM nginx_access_logs WHERE ip = '$ip' AND status = 404;")
 
     # If the total number of 403 and 404 responses is above a threshold, consider it a potential threat
-    local threshold=20  # Adjust the threshold as needed
+    local threshold=5  # Adjust the threshold as needed
 
     # Additional check: Exclude IPs with certain URL patterns from being flagged as potential threats
     local num_legitimate_access
