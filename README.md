@@ -158,4 +158,28 @@ SELECT scan_results FROM nmap_info WHERE ip = 'your_target_ip';
     Request URL: The URL that was requested.
     Status: The HTTP status code of the response.
 
+## nginx-scan-block.sh
+Bash script for monitoring the Nginx access log (/var/log/nginx/access.log), analyzing the incoming requests, and updating a SQLite database (nginx_ips.db) based on certain criteria. Let's break down the main components of the script:
 
+    Functions:
+        update_last_seen_time: Updates the last_seen_time field in the nginx_offenders table for a given IP.
+        insert_audit_log: Inserts an entry into the nginx_audit_logs table with relevant information from the Nginx access log.
+        is_iptables_blocked: Checks if an IP is blocked in iptables by querying the iptables_blocked field in the nginx_offenders table.
+        block_ip_in_iptables: Blocks an IP in iptables and updates the iptables_blocked field in the nginx_offenders table.
+        handle_blank_ghost_ip: Handles cases where the detected IP is empty or invalid.
+        is_ip_whitelisted: Checks if an IP is whitelisted based on a predefined whitelist.
+        is_ip_seen: Checks if an IP has been seen in the logs by querying the seen_count field in the nginx_offenders table.
+        is_potential_threat: Checks if an IP is a potential threat based on the number of 403 and 404 responses.
+
+    Main Logic:
+        Uses a persistent tail command to continuously monitor the last 3 lines of the Nginx access log for new entries.
+        Extracts the IP, timestamp, request method, URI, status code, user agent, and referer from each log entry.
+        Performs various checks and updates the database accordingly:
+            Updates the last_seen_time.
+            Checks for whitelisted IPs.
+            Handles cases of empty or invalid IPs.
+            Adds new IPs to the nginx_offenders table.
+            Checks for potential threats and logs them in a special log file (special_nginx_ip.log).
+            Blocks potential threats in iptables.
+
+The script is designed to run continuously, reacting to new log entries and updating the database dynamically.
