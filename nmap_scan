@@ -1,59 +1,42 @@
 #!/bin/bash
-#needs database update to work
-#scans ips that wernt scanned before with nmap
 
-DATABASE="/home/samba/scripts/nginx_ips.db"
-ESTIMATED_SCAN_TIME_PER_IP=3  # in minutes
+DATABASE="/home/samba/nginx_ips.db"
 PAUSE_BETWEEN_SCANS=5  # in seconds
 
 # Function to perform Nmap scan for an IP
 perform_nmap_scan() {
     local ip="$1"
-    local scan_results
-    scan_results=$(nmap -Pn -sS --script vuln -p 1-1000 "$ip")
-    echo "$scan_results"
-}
-
-# Function to update the nmap_info table
-update_nmap_info() {
-    local ip="$1"
-    local scan_results="$2"
-    sqlite3 "$DATABASE" "UPDATE nmap_info SET scanned = 1, scan_results = '$scan_results' WHERE ip = '$ip';"
+    nmap -Pn -sS --script vuln -p 1-1000 "$ip"
 }
 
 # Main logic
-ips_to_scan=$(sqlite3 "$DATABASE" "SELECT ip FROM nginx_offenders WHERE scanned = 0;")
+while true; do
+    # Get an IP that hasn't been scanned from nginx_offenders
+    ip=$(sqlite3 "$DATABASE" "SELECT ip FROM nginx_offenders WHERE scanned = 0 LIMIT 1;")
 
-total_ips=$(echo "$ips_to_scan" | wc -l)
-current_ip=1
-
-echo "Total IPs to be scanned: $total_ips"
-echo "Estimated total time for the scan: $(($total_ips * ESTIMATED_SCAN_TIME_PER_IP)) minutes"
-echo
-
-while IFS= read -r ip; do
-    echo "Scanning IP $current_ip of $total_ips: $ip"
-
-    # Check if there's an upcoming IP
-    if [ $((current_ip + 1)) -le $total_ips ]; then
-        upcoming_ip=$(echo "$ips_to_scan" | awk "NR == $((current_ip + 1))")
-        echo "Next in line: $upcoming_ip"
-    else
-        echo "No next in line."
+    # Check if there are no more IPs to scan
+    if [ -z "$ip" ]; then
+        echo "No more IPs to scan. Exiting."
+        exit 0
     fi
 
-    scan_results=$(perform_nmap_scan "$ip")
+    # Perform Nmap scan and capture output/errors
+    scan_results=$(perform_nmap_scan "$ip" 2>&1)
 
-    # Check if the scan was successful
-    if [ $? -eq 0 ]; then
-        update_nmap_info "$ip" "$scan_results"
-        current_ip=$((current_ip + 1))
-        sleep $PAUSE_BETWEEN_SCANS  # Pause before moving to the next IP
-        echo  # Empty line for clarity
-    else
-        echo "Failed to scan IP $ip. Retrying in $PAUSE_BETWEEN_SCANS seconds."
-        sleep $PAUSE_BETWEEN_SCANS
-    fi
-done <<< "$ips_to_scan"
+    # Update nmap_info table
+    sqlite3 "$DATABASE" <<EOF
+INSERT INTO nmap_info (ip, scan_results, scanned)
+VALUES ('$ip', '$scan_results', 1);
+EOF
 
-echo "Nmap scans completed."
+    # Mark the IP as scanned in nginx_offenders
+    sqlite3 "$DATABASE" <<EOF
+UPDATE nginx_offenders SET scanned = 1 WHERE ip = '$ip';
+EOF
+
+    echo "Nmap scan results for $ip:"
+    echo "$scan_results"  # Display the scan results
+    echo  # Empty line for clarity
+
+    sleep $PAUSE_BETWEEN_SCANS  # Pause before moving to the next IP
+done
