@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Assuming your database file is named "nginx_ips.db"
+database_file="/home/samba/nginx_ips.db"
+
+# Get the scan results from the database
+scan_results=$(sqlite3 "$database_file" "SELECT scan_results FROM nmap_info;")
+
+# Process each line of the scan results
+while read -r line; do
+    # Extract IP address and check for 22/tcp open
+    if [[ $line =~ ^Nmap\ scan\ report\ for\ ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+        ip="${BASH_REMATCH[1]}"
+    elif [[ $line =~ 22/tcp ]]; then
+        # If "22/tcp" is present, it means SSH port is open
+        sqlite3 "$database_file" "INSERT OR REPLACE INTO ssh_info (ip, ssh_open) VALUES ('$ip', 'ssh open');"
+    fi
+done <<< "$scan_results"
+
