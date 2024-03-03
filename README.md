@@ -37,12 +37,19 @@ CREATE TABLE nginx_audit_logs (
     referer TEXT
 );
 
---create the nmap table
+-- Create nmap_info table
 CREATE TABLE nmap_info (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ip TEXT NOT NULL,
-    scan_results TEXT,
+    scan_results TEXT NOT NULL,
     scanned INTEGER DEFAULT 0
+);
+
+-- Create ssh_info table
+CREATE TABLE ssh_info (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT NOT NULL,
+    ssh_open TEXT DEFAULT ''
 );
 
 ```
