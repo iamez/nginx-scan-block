@@ -157,13 +157,13 @@ SELECT scan_results FROM nmap_info WHERE ip = 'your_target_ip';
 SELECT no.ip, no.seen_count FROM nginx_offenders no JOIN nmap_info ni ON no.ip = ni.ip AND ni.scanned = 1 GROUP BY no.ip HAVING no.seen_count >= 4 ORDER BY no.seen_count DESC LIMIT 100;
 
 --This query counts the distinct IPs in the nmap_info table.
-sqlite3 "/home/et/nginx_ips.db" "SELECT COUNT(DISTINCT ip) FROM nmap_info;"
+SELECT COUNT(DISTINCT ip) FROM nmap_info;
 
 --You can run this query in your terminal to get the count of IPs with open SSH ports.
-sqlite3 "/home/et/nginx_ips.db" "SELECT COUNT(DISTINCT n.ip) FROM nmap_info n JOIN ssh_info s ON n.ip = s.ip WHERE s.ssh_open = 'ssh open';"
+SELECT COUNT(DISTINCT n.ip) FROM nmap_info n JOIN ssh_info s ON n.ip = s.ip WHERE s.ssh_open = 'ssh open';
 
 --This query shows the IP's that have nmap resoults.
-sqlite3 "/home/et/nginx_ips.db" "SELECT ip, COUNT(ip) FROM nmap_info GROUP BY ip;"
+SELECT ip, COUNT(ip) FROM nmap_info GROUP BY ip;
 ```
 
 
